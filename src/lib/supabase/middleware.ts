@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "./database.types";
+import { supabaseEnv } from "./env";
 
 /** Routes reachable without a session. Everything else requires auth. */
 const PUBLIC_PATHS = ["/", "/login", "/signup", "/auth", "/error"];
@@ -20,9 +21,10 @@ function isPublicPath(pathname: string) {
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
+  const { url, key } = supabaseEnv();
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    url,
+    key,
     {
       cookies: {
         getAll() {

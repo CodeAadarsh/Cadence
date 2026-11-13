@@ -64,7 +64,7 @@ Fill in the values printed by `pnpm db:start`:
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | e.g. `http://127.0.0.1:54321` |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | the anon / publishable key |
-| `SUPABASE_SECRET_KEY` | service-role key — **server only**, never prefix with `NEXT_PUBLIC` |
+| `SUPABASE_SECRET_KEY` | service-role key — **local dev only**, used solely by `scripts/seed.mjs`. Never ship it to a host. |
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` in dev, your domain in production |
 
 ### 4. Run
@@ -119,10 +119,14 @@ SEED_EMAIL=you@example.com pnpm db:seed
 
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon key>
-   SUPABASE_SECRET_KEY=<service role key>
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon / publishable key>
    NEXT_PUBLIC_SITE_URL=https://<your-domain>
    ```
+
+   > **Do not add `SUPABASE_SECRET_KEY` to Vercel.** The app never reads it —
+   > it is only used by the local `scripts/seed.mjs` dev seeder. Every runtime
+   > query goes through the user's own session and is gated by RLS, so the
+   > service-role key has no business being on the server.
 
 4. **Lock it down to a single user (optional).** Cadence has no admin role —
    every account is equal and row-level security isolates each user's data. But

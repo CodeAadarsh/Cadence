@@ -13,15 +13,48 @@ export async function onboardIfNeeded(): Promise<{ seeded: boolean }> {
   const user = await requireUser();
   const supabase = await createClient();
 
-  const { data: profile } = await supabase
+  // The profile row is normally created by the on_auth_user_created trigger,
+  // but an account can predate the trigger. Without a row, the "onboarded"
+  // guard below would have nothing to update and would re-seed on every load,
+  // so make sure the row exists first.
+  const { error: upsertError } = await supabase
     .from("profiles")
-    .select("onboarded")
-    .eq("id", user.id)
-    .single();
-  if (profile?.onboarded) return { seeded: false };
+    .upsert(
+      {
+        id: user.id,
+        full_name:
+          (user.user_metadata?.full_name as string | undefined) ?? null,
+      },
+      { onConflict: "id", ignoreDuplicates: true },
+    );
+  if (upsertError) return { seeded: false };
 
-  // Flip the flag first so concurrent loads don't double-seed.
-  await supabase.from("profiles").update({ onboarded: true }).eq("id", user.id);
+  // Never seed on top of existing data, whatever the flag says.
+  const { count: channelCount } = await supabase
+    .from("channels")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  const { count: taskCount } = await supabase
+    .from("tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if ((channelCount ?? 0) > 0 || (taskCount ?? 0) > 0) {
+    await supabase
+      .from("profiles")
+      .update({ onboarded: true })
+      .eq("id", user.id);
+    return { seeded: false };
+  }
+
+  // Atomically claim the right to seed: this only matches while onboarded is
+  // still false, so concurrent requests can't both win.
+  const { data: claimed } = await supabase
+    .from("profiles")
+    .update({ onboarded: true })
+    .eq("id", user.id)
+    .eq("onboarded", false)
+    .select("id");
+  if (!claimed || claimed.length === 0) return { seeded: false };
 
   const channels = [
     { name: "Work", color: "#6366f1", emoji: "💼", position: 1000 },
